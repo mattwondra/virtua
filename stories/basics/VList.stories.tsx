@@ -21,6 +21,37 @@ export default {
   component: VList,
 } as Meta;
 
+// Set a seed value for picsum based on the timestamp the app loaded, to ensure
+// each page refresh uses new uncached images
+const seed = Date.now();
+
+const RowWithImage = ({i}: {i: number}) => {
+  // If we initialize shouldLoad to false, 
+  const [shouldLoad, setShouldLoad] = useState(false);
+
+  useEffect(()=>{
+    setTimeout(() => setShouldLoad(true), 0);
+  }, []);
+
+  // The image is unique for each row, but the same size
+  const src = `https://picsum.photos/seed/${seed + i}/150/200`;
+
+  return (
+    <div style={{ background: "#64B6AC", borderBottom: '1px solid'}}>
+      {i}<br />
+      {shouldLoad && <img src={src} />}
+    </div>
+  );
+}
+
+const createImageRows = (num: number) => {
+  return Array.from({ length: num }).map((_, i) => {
+    return (
+      <RowWithImage key={i} i={i}/>
+    );
+  });
+};
+
 const createRows = (num: number) => {
   const heights = [20, 40, 80, 77];
   return Array.from({ length: num }).map((_, i) => {
@@ -41,7 +72,7 @@ const createRows = (num: number) => {
 
 export const Default: StoryObj = {
   render: () => {
-    return <VList style={{ height: "100vh" }}>{createRows(1000)}</VList>;
+    return <VList style={{ height: "100vh" }}>{createImageRows(1000)}</VList>;
   },
 };
 
