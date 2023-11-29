@@ -23,7 +23,7 @@ export default {
 } as Meta;
 
 const createRows = (num: number) => {
-  const heights = [20, 40, 80, 77];
+  const heights = [20, 440, 30, 17];
   return Array.from({ length: num }).map((_, i) => {
     return (
       <div
@@ -31,7 +31,7 @@ const createRows = (num: number) => {
         style={{
           height: heights[i % 4],
           borderBottom: "solid 1px #ccc",
-          background: "#fff",
+          background: "#08a",
         }}
       >
         {i}
