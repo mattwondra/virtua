@@ -1,5 +1,9 @@
 import { Meta, StoryObj } from "@storybook/react";
 import React, {
+  CSSProperties,
+  ReactElement,
+  RefObject,
+  createContext,
   forwardRef,
   startTransition,
   useEffect,
@@ -162,42 +166,113 @@ export const Responsive: StoryObj = {
   },
 };
 
+// We'll represent virtualized items with an object, so we can inspect them to see where the sticky headers go
+type RenderableItem = { type: 'header' | 'row', value: string };
+
+// Since CacheSnapshot is opaque, we need to re-create the type here. In production the keys are obfuscated, so
+// `_offsets` becomes something like `h`. Ideally, cache data would not be obscured, so we could reliably use it.
+type Cache = {
+  _offsets: number[],
+};
+
+// Our custom Root element will need the list of items, and the VList ref, to construct the sticky headers and
+// render them. We'll use a context to pass these down to the Root element.
+const StickyHeaderContext = createContext<{items: RenderableItem[], vListRef?: RefObject<VListHandle>}>({ items: [] })
+
+// This component finds all the 'header' items and creates sticky scrolling headers for each. It uses the cache
+// from vListRef to determine the offset of each placeholder header row, creating an absolutely-positioned <div>
+// that stretches until the next `header`.
+const StickyHeaders = () => {
+  const { vListRef, items } = React.useContext(StickyHeaderContext)
+
+  if ( ! vListRef?.current?.cache ) {
+    return null;
+  }
+  const { _offsets } = vListRef.current.cache as unknown as Cache;
+
+  // We'll work through the array backwards, so we can determine sticky heights based on the `top` for the header
+  // below. On the first pass, the very bottom header should stretch to the bottom of the scrollable area.
+  let prevTop = vListRef.current.scrollSize;
+  return [...items].reverse().map((item, index) => {
+    if (item.type !== 'header') return null;
+
+    const top = _offsets[items.length - 1 - index];
+    const height = prevTop - top;
+    prevTop = top;
+
+    return (
+      /* The outer div creates the space within which the sticky header will scroll */
+      <div key={item.value} style={{ top, height, width: '100%', position: 'absolute' }}>
+        {/* The inner div is the scrolling sticky header itself */}
+        <div style={{
+          visibility: 'visible', // Needed for items inside virtua to be shown
+          position: 'sticky',
+          zIndex: 1,
+          top: 0,
+          background: '#fff',
+          borderBottom: 'solid 1px #ccc',
+          boxShadow: '0 -1px 0 #ccc',
+          height: 30,
+        }}>
+          {item.value}
+        </div>
+      </div>
+    );
+  });
+}
+
+// Our custom Root element is identical to the default Viewport, except it renders <StickyHeaders /> as
+// a sibling of the virtualized items. This means that _all_ headers will always be rendered — which is
+// important because even if the placeholder for a `header` is outside the virtualized range, we still
+// need the sticky header to be rendered so the user sees it.
+export const ViewportWithStickyHeaders = forwardRef<any, CustomViewportComponentProps>(
+  ({ children, attrs, width, height, scrolling }, ref): ReactElement => {
+    return (
+      <div ref={ref} {...attrs}>
+        <div
+          style={useMemo((): CSSProperties => {
+            return {
+              position: "relative",
+              visibility: "hidden",
+              width: width ?? "100%",
+              height: height ?? "100%",
+              pointerEvents: scrolling ? "none" : "auto",
+            };
+          }, [width, height, scrolling])}
+        >
+          <StickyHeaders />
+          {children}
+        </div>
+      </div>
+    );
+  }
+);
+
 export const Sticky: StoryObj = {
   render: () => {
+    const vListRef = useRef<VListHandle>(null);
+
+    const items: RenderableItem[] = Array.from({ length: 1000 }).map((_, i) => {
+      const tens = Math.floor(i / 10);
+      const ones = i - (tens * 10);
+      return ones === 0
+        ? { type: 'header', value: `${tens}` }
+        : { type: 'row', value: `${tens} - ${ones}` };
+    });
+
     return (
-      <VList style={{ height: "100vh" }} overscan={1}>
-        {Array.from({ length: 100 }).map((_, i) => {
-          return (
-            <div
-              key={i}
-              style={{
-                borderBottom: "solid 1px #ccc",
-              }}
-            >
-              {Array.from({ length: 10 }).map((_, j) => {
-                const isGroupTop = j === 0;
-                return (
-                  <div
-                    key={j}
-                    style={{
-                      height: 60,
-                      background: "#fff",
-                      ...(isGroupTop && {
-                        top: 0,
-                        height: 30,
-                        position: "sticky",
-                        borderBottom: "solid 1px #ccc",
-                      }),
-                    }}
-                  >
-                    {isGroupTop ? i : `${i} - ${j}`}
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
-      </VList>
+      <StickyHeaderContext.Provider value={{ items, vListRef }}>
+        <VList style={{ height: "100vh" }} ref={vListRef} components={{ Root: ViewportWithStickyHeaders }} count={items.length} overscan={4}>
+          {i => {
+            const item = items[i];
+            if ( item.type === 'header' ) {
+              // Placeholder for the sticky header, which will be rendered outside the virtualized list
+              return <div style={{height: 31, background: '#fff'}} />;
+            }
+            return <div style={{height: 60, background: '#fff'}}>{item.value}</div>;
+          } }
+        </VList>
+      </StickyHeaderContext.Provider>
     );
   },
 };
