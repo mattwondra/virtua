@@ -985,6 +985,91 @@ export const IncreasingItems: StoryObj = {
   },
 };
 
+export const EditInteriorItems: StoryObj = {
+  render: () => {
+    const maxNum = useRef(100);
+    const [items, setItems] = useState<number[]>(new Array(maxNum.current).fill(0).map((_, i) => i));
+
+    const [shift, setShift] = useState(false);
+    const [reverse, setReverse] = useState(false);
+    const [amount, setAmount] = useState(2);
+
+    const createItems = (count: number) => new Array(count).fill(0).map(() => maxNum.current++);
+
+    const insertBefore = (index: number) =>
+      setItems([...items.slice(0,index), ...createItems(amount), ...items.slice(index)]);
+    const insertAfter = (index: number) =>
+      setItems([...items.slice(0,index+1), ...createItems(amount), ...items.slice(index+2)]);
+    const removeAtIndex = (index: number) => setItems([...items.slice(0,index), ...items.slice(index+1)]);
+
+    const heights = [40, 60, 100, 177];
+
+    return (
+      <div
+        style={{ height: "100vh", display: "flex", flexDirection: "column" }}
+      >
+        <div>
+        <label style={{ marginRight: 4 }}>
+            <input
+              type="checkbox"
+              checked={shift}
+              onChange={() => {
+                setShift(!shift);
+              }}
+            />
+            shift
+          </label>
+          <label style={{ marginRight: 4 }}>
+            <input
+              type="checkbox"
+              checked={reverse}
+              onChange={() => {
+                setReverse(!reverse);
+              }}
+            />
+            reverse
+          </label>
+          <label style={{ marginRight: 4 }}>
+            <input
+              style={{ margin: '0 4px 0 8px', width: '3em' }}
+              value={amount}
+              type="number"
+              min={1}
+              max={10000}
+              step={1}
+              onChange={(e) => {
+                setAmount(Number(e.target.value));
+              }}
+            />
+            add amount
+          </label>
+        </div>
+        <VList style={{ flex: 1 }} shift={shift} count={items.length}>
+          {i =>
+            <div
+              key={items[i]}
+              style={{
+                height: heights[Math.abs(items[i]) % 4],
+                borderBottom: "solid 1px #68b8cc",
+                background: "linear-gradient(180deg, #97eaff, #61c3dc",
+                padding: "0 10px",
+                display: "flex",
+                alignItems: "center",
+                gap: 10
+              }}
+            >
+              <span style={{flex: 1}}>{items[i]}</span>
+              <button onClick={()=>insertBefore(i)}>add 🔼</button>
+              <button onClick={()=>insertAfter(i)}>add 🔽</button>
+              <button onClick={()=>removeAtIndex(i)}>❌</button>
+            </div>
+          }
+        </VList>
+      </div>
+    );
+  },
+};
+
 const UlList = forwardRef<HTMLDivElement, CustomViewportComponentProps>(
   ({ children, attrs, height }, ref) => {
     return (
