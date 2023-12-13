@@ -623,6 +623,12 @@ export const InfiniteScrolling: StoryObj = {
 };
 
 export const BiDirectionalInfiniteScrolling: StoryObj = {
+  decorators: [
+    // Strict Mode is designed to reveal component lifecycle problems, by double-mounting components,
+    // and running effects twice. In this case, it showcases a problem when we try to calculate `shift`
+    // on the fly based on previous items, when the component can get rendered twice in quick succession.
+    Story => <React.StrictMode><Story /></React.StrictMode>
+  ],
   render: () => {
     const id = useRef(0);
     const createRows = (num: number) => {
@@ -644,17 +650,15 @@ export const BiDirectionalInfiniteScrolling: StoryObj = {
       });
     };
 
-    const [shifting, setShifting] = useState(false);
     const [startFetching, setStartFetching] = useState(false);
     const [endFetching, setEndFetching] = useState(false);
     const fetchItems = async (isStart: boolean = false) => {
-      setShifting(isStart);
-
       const setFetching = isStart ? setStartFetching : setEndFetching;
 
       setFetching(true);
       await delay(1000);
       setFetching(false);
+      return createRows(ITEM_BATCH_COUNT);
     };
 
     const ref = useRef<VListHandle>(null);
@@ -671,27 +675,30 @@ export const BiDirectionalInfiniteScrolling: StoryObj = {
       ready.current = true;
     }, []);
 
+    // Dynamically detect whether we should be shifting, based on whether the first item's key has changed.
+    const previousFirstKey = useRef(items[0].key);
+    const shifting = previousFirstKey.current !== items[0].key;
+    console.log("Shift?", shifting, previousFirstKey.current, items[0].key);
+    previousFirstKey.current = items[0].key;
+
     return (
       <VList
         ref={ref}
         style={{ flex: 1 }}
-        shift={shifting ? true : false}
+        shift={shifting}
         onRangeChange={async (start, end) => {
           if (!ready.current) return;
           if (end + THRESHOLD > count && endFetchedCountRef.current < count) {
             endFetchedCountRef.current = count;
-            await fetchItems();
-            setItems((prev) => [...prev, ...createRows(ITEM_BATCH_COUNT)]);
+            const newItems = await fetchItems();
+            setItems([...items, ...newItems]); // StrictMode runs this twice, causing double-consecutive render
           } else if (
             start - THRESHOLD < 0 &&
             startFetchedCountRef.current < count
           ) {
             startFetchedCountRef.current = count;
-            await fetchItems(true);
-            setItems((prev) => [
-              ...createRows(ITEM_BATCH_COUNT).reverse(),
-              ...prev,
-            ]);
+            const newItems = await fetchItems(true);
+            setItems([...newItems, ...items]); // StrictMode runs this twice, causing double-consecutive render
           }
         }}
       >
